@@ -35,6 +35,16 @@ SyncQueue write_remained_files_queue;
 SyncQueue write_g1_remained_files_queue;
 SyncQueue write_g2_remained_files_queue;
 
+containerid container_count;
+
+void free_chunk(struct chunk* ck) {
+    if (ck->data) {
+	free(ck->data);
+	ck->data = NULL;
+    }
+    free(ck);
+}
+
 static int comp_fp_by_fid(const void *s1, const void *s2)
 {
     return ((struct fp_info *)s1)->fid - ((struct fp_info *)s2)->fid;
@@ -327,31 +337,43 @@ void read_remained_files_data_thread(void *arg) {
     SyncQueue *remained_files_queue;
     struct remained_file_info *one_file;
     char pool_path[128];
+    char new_meta_path[128];
+    char new_record_path[128];
 
     char *group = arg;
-    if (!strcmp(group, "g1")) 
-	snprintf(pool_path, "%s/%s", g1, container.pool);
+    if (!strcmp(group, "g1")) { 
+	sprintf(pool_path, "%s/%s", g1, "container.pool");
+	sprintf(new_meta_path, "%s/%s", g1, "new.meta");
+	sprintf(new_record_path, "%s/%s", g1, "new.recipe");
 	remained_files_queue = update_g1_remianed_files_queue; 
     } else { 
-	snprintf(pool_path, "%s/%s", g2, container.pool);
+	sprintf(pool_path, "%s/%s", g2, "container.pool");
+	sprintf(new_meta_path, "%s/%s", g2, "new.meta");
+	sprintf(new_record_path, "%s/%s", g2, "new.recipe");
 	remained_files_queue = update_g2_remianed_files_queue; 
     }
 
+    FILE *new_metadata_fp = NULL;
     static int metabufsize = 64*1024;
     char *metabuf = malloc(metabufsize);
     int32_t metabufoff = 0;
     uint64_t recipe_offset = 0;
     int one_chunk_size = sizeof(fingerprint) + sizeof(containerid) + sizeof(int32_t);
 
+    FILE *new_record_fp = NULL;
     static int recordbufsize = 64*1024;
     int32_t recordbufoff = 0;
     char *recordbuf = malloc(recordbufsize);
     recipe_offset = one_chunk_size;
 
     GHashTable *recently_unique_chunks = g_hash_table_new_full(g_int64_hash, g_fingerprint_equal, NULL, free_chunk);
-    
+
+    uint64_t containerid = 0;
+
+    new_metadata_fp = fopen(new_meta_path, "w+");
+    new_record_fp = fopen(new_record_path, "w+");
      
-    FILE *pool_fp = fopen(pool_path);
+    FILE *old_pool_fp = fopen(pool_path, "r");
     char *data = NULL;
     while ((one_file = sync_queue_pop(remained_files_queue))) {
 	uint64_t i = 0;
@@ -363,12 +385,17 @@ void read_remained_files_data_thread(void *arg) {
 
         memcpy(metabuf + metabufoff, &one_file->chunknum, sizeof(one_file->chunknum));
         metabufoff += sizeof(one_file->chunknum);
-        memcpy(metabuf + metabufoff, &one_file->size, sizeof(one_file->size));
-        b->metabufoff += sizeof(r->filesize);
+        memcpy(metabuf + metabufoff, &one_file->filesize, sizeof(one_file->filesize));
+        metabufoff += sizeof(one_file->filesize);
+
+	if (sizeof(one_file->fid) + sizeof(recipe_offset) + sizeof(one_file->chunknum) + sizeof(one_file->filesize) > metabufsize - metabufoff) {
+	    fwrite(metabuf, metabufoff, 1, new_metadata_fp);
+	    metabufoff = 0;
+	}
 
 	recipe_offset += (one_file->chunknum) * one_chunk_size;
 	
-	
+	int32_t chunk_size;
 	for (i = 0; i < one_file->chunknum; i++) {
 	    struct chunk* ruc = g_hash_table_lookup(recently_unique_chunks, &one_file->fps[i]);
 	    if (NULL == ruc) {
@@ -376,26 +403,53 @@ void read_remained_files_data_thread(void *arg) {
 		    storage_buffer.container_buffer = create_container();
 		    storage_buffer.chunks = g_sequence_new(free_chunk);
 		}
-		ruc = (struct chunk *)malloc(sizeof(struct chunk));
-		
-		g_hash_table_insert(recently_unique_chunks, &ne_file->fps[i], );
-	    }
-	    c->id = ruc->id;
+		chunk_size = retrieve_from_container(old_pool_fp, one_file->fps_cid[i], &data, one_file->fps[i]);
 
-	    int32_t chunk_size = retrieve_from_container(pool_fp, one_file->fps_cid[i], &data, one_file->fps[i]);
+		if (container_overflow(storage_buffer.container_buffer, chunk_size))
+		{
+		    write_container_async(storage_buffer.container_buffer);    
+		    storage_buffer.container_buffer = create_container();
+		    storage_buffer.chunks = g_sequence_new(free_chunk);
+		}
+
+		ruc = (struct chunk *)malloc(sizeof(struct chunk));
+		ruc->size = chunk_size;
+		ruc->id = container_count; 
+		memcpy(ruc->fp, &one_file->fps[i], sizeof(fingerprint));
+		
+		g_hash_table_insert(recently_unique_chunks, &one_file->fps[i], ruc);
+	    }
+	    
+	    chunk_size = ruc->size;
+
+	    if(recordbufoff + sizeof(fingerprint) + sizeof(containerid) + sizeof(chunk_size) > recordbufsize) {
+		fwrite(recordbuf, recordbufoff, 1, new_record_fp);
+		recordbufoff = 0;
+	    }		
+
 	    struct fp_data * one_data = (struct fp_data *)malloc(sizeof(struct fp_data));			
 	    one_data->data = data;	
-	    memcpy(recordbuf + recordbufoff, one_file->fps[i]), sizeof(fingerprint); 
+	    memcpy(recordbuf + recordbufoff, one_file->fps[i], sizeof(fingerprint)); 
 	    recordbufoff += sizeof(fingerprint);
-	    memcpy(recordbuf + recordbufoff, , sizeof(containerid); 
+	    memcpy(recordbuf + recordbufoff, &container_count, sizeof(containerid)); 
 	    recordbufoff += sizeof(containerid);
-	    memcpy(recordbuf + recordbufoff, &chunk_size, sizeof(chunk_size); 
+	    memcpy(recordbuf + recordbufoff, &chunk_size, sizeof(chunk_size)); 
 	    recordbufoff += sizeof(chunk_size);
-
-	}		
-	
+	}
     }
-    
+
+    if( recordbufoff ) {
+	fwrite(recordbuf, recordbufoff, 1, new_record_fp);
+    	recordbufoff = 0;
+    }
+    if( metabufoff ) {
+        fwrite(metabuf, metabufoff, 1, new_metadata_fp);
+        metabufoff = 0;
+    }
+
+    fclose(old_pool_fp);
+    fclsoe(new_metadata_fp);
+    fclsoe(new_record_fp);
 }
 
 int main(int argc, char *argv[])

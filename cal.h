@@ -8,6 +8,7 @@ struct identified_file_info
 {
 	uint64_t fid;
 	uint64_t num;
+	uint64_t filesize;
 	uint64_t flag; //1-> dedup, 0-> stay
 	fingerprint *fps; //sorted by order
 	uint64_t *sizes; //for size
@@ -18,6 +19,7 @@ struct migrated_file_info
 {
 	uint64_t fid;
 	uint64_t total_num;
+	uint64_t filesize;
 	fingerprint *fps; //sorted by order
 	uint64_t *arr;//0~total, for size; total~2*total, for if it exist
 	// int64_t *sizes; //for size

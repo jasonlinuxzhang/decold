@@ -16,7 +16,7 @@ LINKFLAGS =
 #LIBS    += -lrt
 #LIBS    += -lglib 
 
-OBJECT := decold.o cal.o recipe.o common.o queue.o sync_queue.o
+OBJECT := decold.o cal.o recipe.o common.o queue.o sync_queue.o containerstore.o
 
 
 BIN_PATH = ./
