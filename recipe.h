@@ -2,6 +2,7 @@
 #define __RECIPE_H
 
 #include "common.h"
+#include "decold.h"
 
 //Destor recipe meta struct
 struct fileRecipeMeta
@@ -61,7 +62,7 @@ struct remained_file_info
 void read_recipe(const char *path, struct fp_info **s1, int64_t *s1_count, struct file_info **mr, int64_t *mr_count, int64_t *empty_count);
 
 //Destor func
-int32_t retrieve_from_container(FILE *pool_fp, containerid cid, unsigned char** v, fingerprint *fps);
+int32_t retrieve_from_container(FILE *pool_fp, containerid cid, unsigned char** v, fingerprint fps);
 
 //void get_chunk_in_container();
 

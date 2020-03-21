@@ -1,4 +1,6 @@
 #include "recipe.h"
+#include "containerstore.h"
+#include "serial.h"
 
 // int64_t demo_fid =0;
 
@@ -128,7 +130,7 @@ void read_recipe(const char *path, struct fp_info **s1_t, int64_t *s1_count, str
 
 }
 
-static void get_chunk_from_container(unsigned char *vv, struct container *c, fingerprint *fp)
+static int32_t get_chunk_from_container(unsigned char **vv, struct container *c, fingerprint fp)
 {
 	struct metaEntry* me = g_hash_table_lookup(c->meta.map, fp);
 	if (!c->meta.map)
@@ -137,13 +139,19 @@ static void get_chunk_from_container(unsigned char *vv, struct container *c, fin
 	if (!me)
 		VERBOSE("ASSERT, ME == NULL!\n");
 
+	if (me) {
+	    *vv = (unsigned char *)malloc(me->len);
+	    memcpy(*vv, c->data + me->off, me->len);
+	}
+
 	if (me)
-	memcpy(vv, c->data + me->off, me->len);
-	//print_unsigned(vv,me->len);
+	    return me->len;
+	else 
+	    return -1;
 }
 
 //for Destor func, locality
-int32_t retrieve_from_container(FILE* pool_fp, containerid cid, unsigned char *v, fingerprint fp)
+int32_t retrieve_from_container(FILE* pool_fp, containerid cid, unsigned char **v, fingerprint fp)
 {
 	struct container *c = (struct container*) malloc(sizeof(struct container));
 	c->meta.chunk_num = 0;

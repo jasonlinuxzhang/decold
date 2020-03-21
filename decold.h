@@ -1,6 +1,7 @@
 #ifndef _DECOLD
 #define _DECOLD
 
+
 struct{
     /* accessed in dedup phase */
     struct container *container_buffer;

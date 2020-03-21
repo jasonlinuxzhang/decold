@@ -2,19 +2,17 @@
 #include "common.h"
 #include "queue.h"
 #include "sync_queue.h"
+#include "decold.h"
+#include "serial.h"
 
-static SyncQueue* container_buffer;
-static FILE *fp;
 static pthread_t append_t;
+static FILE *new_container_pool_fp;
+static SyncQueue *new_container_buffer;
 containerid container_count  = 0;
 
-gboolean g_fingerprint_equal(fingerprint* fp1, fingerprint* fp2) {
-    return !memcmp(fp1, fp2, sizeof(fingerprint));
-}
+extern char g1_path[128];
+extern char g2_path[128];
 
-gint g_fingerprint_cmp(fingerprint* fp1, fingerprint* fp2, gpointer user_data) {
-    return memcmp(fp1, fp2, sizeof(fingerprint));
-}
 
 static void init_container_meta(struct containerMeta *meta) {
     meta->chunk_num = 0;
@@ -46,15 +44,9 @@ int container_overflow(struct container* c, int32_t size) {
     return 0;
 }
 
-/*
- *  * For backup.
- *   * return 1 indicates success.
- *    * return 0 indicates fail.
- *     */
 int add_chunk_to_container(struct container* c, struct chunk* ck) {
-    assert(!container_overflow(c, ck->size));
+    //assert(!container_overflow(c, ck->size));
     if (g_hash_table_contains(c->meta.map, &ck->fp)) {
-	NOTICE("Writing a chunk already in the container buffer!");
 	ck->id = c->meta.id;
 	return 0;
     }
@@ -67,8 +59,7 @@ int add_chunk_to_container(struct container* c, struct chunk* ck) {
     g_hash_table_insert(c->meta.map, &me->fp, me);
     c->meta.chunk_num++;
 
-    if (destor.simulation_level < SIMULATION_APPEND)
-	memcpy(c->data + c->meta.data_size, ck->data, ck->size);
+    memcpy(c->data + c->meta.data_size, ck->data, ck->size);
 
     c->meta.data_size += ck->size;
 
@@ -102,7 +93,8 @@ void write_container_async(struct container* c) {
 	return;
     }
 
-    sync_queue_push(container_buffer, c);
+    printf("push container:%lu\n", c->meta.id);
+    sync_queue_push(new_container_buffer, c);
 }
 
 void write_container(struct container* c) {
@@ -118,7 +110,7 @@ void write_container(struct container* c) {
 	return;
     }
 
-    VERBOSE("Append phase: Writing container %lld of %d chunks", c->meta.id,
+    VERBOSE("Append phase: Writing container %lld of %d chunks\n", c->meta.id,
 	    c->meta.chunk_num);
 
 	unsigned char * cur = &c->data[CONTAINER_SIZE - CONTAINER_META_SIZE];
@@ -127,6 +119,7 @@ void write_container(struct container* c) {
 	ser_int64(c->meta.id);
 	ser_int32(c->meta.chunk_num);
 	ser_int32(c->meta.data_size);
+	printf("write container %lu data_size\n", c->meta.id, c->meta.data_size);
 
 	GHashTableIter iter;
 	gpointer key, value;
@@ -141,45 +134,54 @@ void write_container(struct container* c) {
 	ser_end(cur, CONTAINER_META_SIZE);
 
 
-	if (fseek(fp, c->meta.id * CONTAINER_SIZE + 8, SEEK_SET) != 0) {
-	    perror("Fail seek in container store.");
-	    exit(1);
-	}
-	if(fwrite(c->data, CONTAINER_SIZE, 1, fp) != 1){
-	    perror("Fail to write a container in container store.");
-	    exit(1);
-	}
+    if (fseek(new_container_pool_fp, c->meta.id * CONTAINER_SIZE + 8, SEEK_SET) != 0) {
+        perror("Fail seek in container store.");
+        exit(1);
+    }
+    if(fwrite(c->data, CONTAINER_SIZE, 1, new_container_pool_fp) != 1){
+        perror("Fail to write a container in container store.");
+        exit(1);
+    }
 
 }
 
 static void* append_thread(void *arg) {
-
     while (1) {
-	struct container *c = sync_queue_get_top(container_buffer);
+	struct container *c = sync_queue_pop(new_container_buffer);
 	if (c == NULL)
 	    break;
 
+	printf ("get container\n");
 	write_container(c);
-
-	sync_queue_pop(container_buffer);
-
     }
 
     return NULL;
 }
 
-void init_container_store(char *pool_path) {
+void init_container_store(char *group) {
+    
+    char new_container_pool[128] = {0};
 
-    if ((fp = fopen(pool_path, "r+"))) {
-	fread(&container_count, 8, 1, fp);
-    } else if (!(fp = fopen(pool_path, "w+"))) {
-	perror(
-		"Can not create container.pool for read and write because");
-	exit(1);
+    if (!strcmp(group, "g1")) {
+	sprintf(new_container_pool, "%s/new_container.pool", g1_path);	
+    } else {
+	sprintf(new_container_pool, "%s/new_container.pool", g2_path);	
     }
-
-    container_buffer = sync_queue_new(25);
-
+    new_container_buffer = sync_queue_new(25);
+    new_container_pool_fp = fopen(new_container_pool, "w+");
     pthread_create(&append_t, NULL, append_thread, NULL);
+}
+
+void close_container_store() {
+    sync_queue_term(new_container_buffer);
+
+    pthread_join(append_t, NULL);
+
+    fseek(new_container_pool_fp, 0, SEEK_SET);
+    fwrite(&container_count, sizeof(container_count), 1, new_container_pool_fp);
+    container_count = 0;
+
+    fclose(new_container_pool_fp);
+    new_container_pool_fp = NULL;
 
 }

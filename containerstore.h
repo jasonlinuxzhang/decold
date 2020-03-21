@@ -23,6 +23,12 @@ struct container {
     unsigned char *data;
 };
 
+struct metaEntry {
+    int32_t off;
+    int32_t len;
+    fingerprint fp;
+};
+
 void init_container_store();
 void close_container_store();
 
