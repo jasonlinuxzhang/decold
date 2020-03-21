@@ -10,8 +10,10 @@ static FILE *new_container_pool_fp;
 static SyncQueue *new_container_buffer;
 containerid container_count  = 0;
 
+
 extern char g1_path[128];
 extern char g2_path[128];
+extern int target_group;
 
 
 static void init_container_meta(struct containerMeta *meta) {
@@ -158,11 +160,11 @@ static void* append_thread(void *arg) {
     return NULL;
 }
 
-void init_container_store(char *group) {
+void init_container_store() {
     
     char new_container_pool[128] = {0};
 
-    if (!strcmp(group, "g1")) {
+    if (0 == target_group) {
 	sprintf(new_container_pool, "%s/new_container.pool", g1_path);	
     } else {
 	sprintf(new_container_pool, "%s/new_container.pool", g2_path);	
