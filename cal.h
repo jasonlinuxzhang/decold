@@ -11,8 +11,8 @@ struct identified_file_info
 	uint64_t filesize;
 	uint64_t flag; //1-> dedup, 0-> stay
 	fingerprint *fps; //sorted by order
-	uint64_t *sizes; //for size
-	uint64_t *fp_cids; //for container ids
+	int32_t *sizes; //for size
+	containerid *fp_cids; //for container ids
 };
 
 struct migrated_file_info

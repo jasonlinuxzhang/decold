@@ -66,7 +66,7 @@ void cal_inter(struct fp_info *s1, int64_t s1_count, struct fp_info *s2, int64_t
 				scommon11[*sc1_count].cid = s1[a + i].cid;
 				scommon11[*sc1_count].fid = s1[a + i].fid;
 				scommon11[*sc1_count].order = s1[a + i].order;
-				VERBOSE("G1 GET SAME CHUNK   CHUNK:fid=[%8" PRId64 "], order=%" PRId64 ", size=%" PRId64 ", container_id=%" PRId64 "\n", scommon11[*sc1_count].fid, scommon11[*sc1_count].order, scommon11[*sc1_count].size, scommon11[*sc1_count].cid);
+				//VERBOSE("G1 GET SAME CHUNK   CHUNK:fid=[%8" PRId64 "], order=%" PRId64 ", size=%" PRId64 ", container_id=%" PRId64 "\n", scommon11[*sc1_count].fid, scommon11[*sc1_count].order, scommon11[*sc1_count].size, scommon11[*sc1_count].cid);
 				(*sc1_count)++;
     
 			}

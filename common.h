@@ -64,4 +64,6 @@ void display_hash_table(GHashTable *table);
 
 void storage_hash_table(GHashTable *table);
 
+void myprintf(const char *cmd, ...); 
+
 #endif

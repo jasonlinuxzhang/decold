@@ -145,3 +145,15 @@ void storage_hash_table(GHashTable *table)
     fwrite(&item_count, sizeof(item_count), 1, fp);
     fclose(fp);
 }
+
+
+
+void myprintf(const char *cmd, ...)  
+{  
+    if (LEVEL <= 2)
+	return; 
+    va_list args;        
+    va_start(args,cmd); 
+    vprintf(cmd,args);  
+    va_end(args);   
+} 

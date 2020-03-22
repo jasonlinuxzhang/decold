@@ -18,6 +18,9 @@ static int64_t read_next_n_chunk_pointers(FILE *recipe_fp, int64_t fid, struct f
 		fread(&(cp->fp), sizeof(fingerprint), 1, recipe_fp);
 		fread(&(cp->id), sizeof(containerid), 1, recipe_fp);
 		fread(&(cp->size), sizeof(int32_t), 1, recipe_fp);
+	    
+		char code[41] = {0};
+		hash2code(cp->fp, code);
 
 		// Ignore segment boundaries
 		//only count really chunk, escape FILE and SEGMENT
@@ -58,7 +61,6 @@ void read_recipe(const char *path, struct fp_info **s1_t, int64_t *s1_count, str
 	sprintf(path_meta, "%s%s", path, "bv0.meta");
 	sprintf(path_recipe, "%s%s", path, "bv0.recipe");
 
-	//printf("%s;%s\n",path_meta,path_recipe);
 	FILE *meta_fp = fopen(path_meta, "r");
 	FILE *recipe_fp = fopen(path_recipe, "r");
 
@@ -103,8 +105,6 @@ void read_recipe(const char *path, struct fp_info **s1_t, int64_t *s1_count, str
 		fread(&file->chunknum, sizeof(file->chunknum), 1, meta_fp);
 		fread(&file->filesize, sizeof(file->filesize), 1, meta_fp);
 
-		//TO-DO fid by myself, it can be lookup by RocksDB
-
 		//map_recipe
 		mr[*mr_count].fid = file->fid;
 		mr[*mr_count].size = file->filesize;
@@ -117,6 +117,7 @@ void read_recipe(const char *path, struct fp_info **s1_t, int64_t *s1_count, str
 			(*empty_count)++;
 
 		(*mr_count)++;
+
 		//summary
 		read_next_n_chunk_pointers(recipe_fp, file->fid, s1, s1_count, file->chunknum);
 	}
@@ -176,7 +177,7 @@ int32_t retrieve_from_container(FILE* pool_fp, containerid cid, unsigned char **
 	unser_int32(c->meta.chunk_num);
 	unser_int32(c->meta.data_size);
 
-	printf("read container id:%ld, chun_num:%d, data_size:%d\n", c->meta.id, c->meta.chunk_num, c->meta.data_size);
+	myprintf("read container id:%ld, chun_num:%d, data_size:%d\n", c->meta.id, c->meta.chunk_num, c->meta.data_size);
 
 	
 	for (i = 0; i < c->meta.chunk_num; i++)
@@ -189,7 +190,7 @@ int32_t retrieve_from_container(FILE* pool_fp, containerid cid, unsigned char **
 
 		char code[41] = {0};
 		hash2code(me->fp, code);	
-		printf("read fp:%s len:%d off:%d\n", code, me->len, me->off);
+		myprintf("read fp:%s len:%d off:%d\n", code, me->len, me->off);
 	}
 
 	if (!c->meta.map)

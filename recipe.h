@@ -27,7 +27,7 @@ struct fp_info
 {
 	fingerprint fp;
 	uint64_t order; // record the sequence of fp in the file
-	uint64_t size; //recorder the size
+	int32_t size; //recorder the size
 	uint64_t fid;
 	containerid cid;
 };
