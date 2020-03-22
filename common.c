@@ -94,7 +94,7 @@ gint g_fingerprint_cmp(fingerprint* fp1, fingerprint* fp2, gpointer user_data) {
 
 void print_key_value(gpointer key, gpointer value, gpointer user_data)
 {
-    char code[40] = {0};
+    char code[41] = {0};
     fingerprint *fp = key;
     struct chunk *ck = value; 
     hash2code(*fp, code);

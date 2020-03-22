@@ -79,7 +79,7 @@ void cal_inter(struct fp_info *s1, int64_t s1_count, struct fp_info *s2, int64_t
 				scommon22[*sc2_count].cid = s2[b + i].cid;
 				scommon22[*sc2_count].fid = s2[b + i].fid;
 				scommon22[*sc2_count].order = s2[b + i].order;
-				VERBOSE("G2 GET SAME CHUNK   CHUNK:fid=[%8" PRId64 "], order=%" PRId64 ", size=%" PRId64 ", container_id=%" PRId64 "\n", scommon22[*sc2_count].fid, scommon22[*sc2_count].order, scommon22[*sc2_count].size, scommon22[*sc2_count].cid);
+				//VERBOSE("G2 GET SAME CHUNK   CHUNK:fid=[%8" PRId64 "], order=%" PRId64 ", size=%" PRId64 ", container_id=%" PRId64 "\n", scommon22[*sc2_count].fid, scommon22[*sc2_count].order, scommon22[*sc2_count].size, scommon22[*sc2_count].cid);
 				(*sc2_count)++;
 			}
 
@@ -196,7 +196,7 @@ void file_find(struct file_info *mr, int64_t mr_count, struct fp_info *scommon, 
 		//show mr1
 		for (i = 0; i < mr_count; i++)
 		{
-			VERBOSE("SORT MAP RECIPE: [%8" PRId64 "],num=%" PRId64 ",size=%" PRId64 ";offset_m=%" PRId64 ";offset_r=%" PRId64 ";\n", mr[i].fid, mr[i].chunknum, \
+		//	VERBOSE("SORT MAP RECIPE: [%8" PRId64 "],num=%" PRId64 ",size=%" PRId64 ";offset_m=%" PRId64 ";offset_r=%" PRId64 ";\n", mr[i].fid, mr[i].chunknum, \
 				mr[i].size, mr[i].offset_m, mr[i].offset_r);
 			/*
 			VERBOSE("SORT MAP RECIPE: [%8" PRId64 "],num=%" PRId64 ",size=%" PRId64 ";\n", mr[i].fid, mr[i].chunknum, \
@@ -214,7 +214,7 @@ void file_find(struct file_info *mr, int64_t mr_count, struct fp_info *scommon, 
 
 	for (i = 0; i < sc_count;)
 	{
-		VERBOSE("FILE_FIND CHUNK:fid=[%8" PRId64 "], order=%" PRId64 ", size=%" PRId64 ", container_id=%" PRId64 "\n", scommon[i].fid, scommon[i].order, scommon[i].size, scommon[i].cid);
+		//VERBOSE("FILE_FIND CHUNK:fid=[%8" PRId64 "], order=%" PRId64 ", size=%" PRId64 ", container_id=%" PRId64 "\n", scommon[i].fid, scommon[i].order, scommon[i].size, scommon[i].cid);
 		int64_t j = 1;
 		while (i + j < sc_count && scommon[i].fid == scommon[i + j].fid)
 			j++;

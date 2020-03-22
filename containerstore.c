@@ -48,7 +48,12 @@ int container_overflow(struct container* c, int32_t size) {
 
 int add_chunk_to_container(struct container* c, struct chunk* ck) {
     //assert(!container_overflow(c, ck->size));
+    
+    char code[41];
+    hash2code(ck->fp, code);
+
     if (g_hash_table_contains(c->meta.map, &ck->fp)) {
+	printf("fp:%s already exist\n", code);
 	ck->id = c->meta.id;
 	return 0;
     }
@@ -57,6 +62,9 @@ int add_chunk_to_container(struct container* c, struct chunk* ck) {
     memcpy(&me->fp, &ck->fp, sizeof(fingerprint));
     me->len = ck->size;
     me->off = c->meta.data_size;
+    memset(code, 0, sizeof(code));
+    hash2code(me->fp, code);
+    printf("add fp:%s len:%d off:%d container_id:%lu\n", code, me->len, me->off, c->meta.id);
 
     g_hash_table_insert(c->meta.map, &me->fp, me);
     c->meta.chunk_num++;
@@ -115,26 +123,28 @@ void write_container(struct container* c) {
     VERBOSE("Append phase: Writing container %lld of %d chunks\n", c->meta.id,
 	    c->meta.chunk_num);
 
-	unsigned char * cur = &c->data[CONTAINER_SIZE - CONTAINER_META_SIZE];
-	ser_declare;
-	ser_begin(cur, CONTAINER_META_SIZE);
-	ser_int64(c->meta.id);
-	ser_int32(c->meta.chunk_num);
-	ser_int32(c->meta.data_size);
-	printf("write container %lu data_size\n", c->meta.id, c->meta.data_size);
+    unsigned char * cur = &c->data[CONTAINER_SIZE - CONTAINER_META_SIZE];
+    ser_declare;
+    ser_begin(cur, CONTAINER_META_SIZE);
+    ser_int64(c->meta.id);
+    ser_int32(c->meta.chunk_num);
+    ser_int32(c->meta.data_size);
+    printf("write container %lu data_size %d\n", c->meta.id, c->meta.data_size);
 
-	GHashTableIter iter;
-	gpointer key, value;
-	g_hash_table_iter_init(&iter, c->meta.map);
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-	    struct metaEntry *me = (struct metaEntry *) value;
-	    ser_bytes(&me->fp, sizeof(fingerprint));
-	    ser_bytes(&me->len, sizeof(int32_t));
-	    ser_bytes(&me->off, sizeof(int32_t));
-	}
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, c->meta.map);
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
+	struct metaEntry *me = (struct metaEntry *) value;
+        ser_bytes(&me->fp, sizeof(fingerprint));
+        ser_bytes(&me->len, sizeof(int32_t));
+        ser_bytes(&me->off, sizeof(int32_t));
+        char code[41] = {0};
+        hash2code(me->fp, code);	
+        printf("write fp %s off %lu chunk_size %d\n", code, me->off, me->len);
+    }
 
-	ser_end(cur, CONTAINER_META_SIZE);
-
+    ser_end(cur, CONTAINER_META_SIZE);
 
     if (fseek(new_container_pool_fp, c->meta.id * CONTAINER_SIZE + 8, SEEK_SET) != 0) {
         perror("Fail seek in container store.");

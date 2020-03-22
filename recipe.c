@@ -4,6 +4,7 @@
 
 // int64_t demo_fid =0;
 
+char base_path[128] = {0};
 
 static int64_t read_next_n_chunk_pointers(FILE *recipe_fp, int64_t fid, struct fp_info *s1, int64_t *s1_count, int64_t num)
 {
@@ -80,10 +81,9 @@ void read_recipe(const char *path, struct fp_info **s1_t, int64_t *s1_count, str
 	int pathlen;
 	//path
 	fread(&pathlen, sizeof(int), 1, meta_fp);
-	char path_t[pathlen + 1];
 
-	fread(path_t, pathlen, 1, meta_fp);
-	path_t[pathlen] = 0;
+	fread(base_path, pathlen, 1, meta_fp);
+	base_path[pathlen] = 0;
 
 	//fp->fid
 	//int64_t s1_count=0, mr_count=0;
@@ -176,6 +176,9 @@ int32_t retrieve_from_container(FILE* pool_fp, containerid cid, unsigned char **
 	unser_int32(c->meta.chunk_num);
 	unser_int32(c->meta.data_size);
 
+	printf("read container id:%ld, chun_num:%d, data_size:%d\n", c->meta.id, c->meta.chunk_num, c->meta.data_size);
+
+	
 	for (i = 0; i < c->meta.chunk_num; i++)
 	{
 		struct metaEntry* me = (struct metaEntry*) malloc(sizeof(struct metaEntry));
@@ -183,6 +186,10 @@ int32_t retrieve_from_container(FILE* pool_fp, containerid cid, unsigned char **
 		unser_bytes(&me->len, sizeof(int32_t));
 		unser_bytes(&me->off, sizeof(int32_t));
 		g_hash_table_insert(c->meta.map, &me->fp, me);
+
+		char code[41] = {0};
+		hash2code(me->fp, code);	
+		printf("read fp:%s len:%d off:%d\n", code, me->len, me->off);
 	}
 
 	if (!c->meta.map)

@@ -9,6 +9,8 @@
 char *g1 = "g1", *g2 = "g2";
 int target_group = 0;
 
+extern char base_path[128];
+
 int enable_migration = 1;
 int enable_refs = 0;
 int enable_topk = 0;
@@ -284,11 +286,12 @@ void * write_identified_file_to_temp_thread(void *arg)
 	identified_file_count++;
     }
 
-    fseek(filep, 0,SEEK_SET);
-    fwrite(&identified_file_count, sizeof(uint64_t), 1, filep);
-
-    if (NULL != filep)
+    // if have identified file
+    if (NULL != filep) {
+	fseek(filep, 0,SEEK_SET);
+	fwrite(&identified_file_count, sizeof(uint64_t), 1, filep);
 	fclose(filep);
+    }
     		
     return NULL;
 }
@@ -483,7 +486,7 @@ void *read_remained_files_data_thread(void *arg) {
     static int recordbufsize = 64*1024;
     int32_t recordbufoff = 0;
     char *recordbuf = malloc(recordbufsize);
-    recipe_offset = one_chunk_size;
+    //recipe_offset = one_chunk_size;
 
     GHashTable *recently_unique_chunks = g_hash_table_new_full(g_int64_hash, g_fingerprint_equal, NULL, free_chunk);
 
@@ -503,7 +506,7 @@ void *read_remained_files_data_thread(void *arg) {
     }
 
 
-    int32_t bv_num = 1;
+    int32_t bv_num = 0;
     int deleted = 0;
     int64_t number_of_files = 0;
     int64_t number_of_chunks = 0;
@@ -516,6 +519,13 @@ void *read_remained_files_data_thread(void *arg) {
     metabufoff += sizeof(number_of_files);
     memcpy(metabuf + metabufoff, &number_of_chunks, sizeof(number_of_chunks));
     metabufoff += sizeof(number_of_chunks);
+
+    int32_t path_len = strlen(base_path);
+    memcpy(metabuf + metabufoff, &path_len, sizeof(int32_t));
+    metabufoff += sizeof(int32_t);
+
+    memcpy(metabuf + metabufoff, base_path, path_len);
+    metabufoff += path_len;
 
     char *data = NULL;
     while ((one_file = sync_queue_pop(remained_files_queue))) {
@@ -549,6 +559,8 @@ void *read_remained_files_data_thread(void *arg) {
 		    storage_buffer.container_buffer = create_container();
 		    storage_buffer.chunks = g_sequence_new(free_chunk);
 		}
+	
+		printf("try to retrieve container %lu\n", one_file->fps_cid[i]);
 		chunk_size = retrieve_from_container(old_pool_fp, one_file->fps_cid[i], &data, one_file->fps[i]);
 
 		if (container_overflow(storage_buffer.container_buffer, chunk_size))
@@ -560,10 +572,13 @@ void *read_remained_files_data_thread(void *arg) {
 
 		ruc = (struct chunk *)malloc(sizeof(struct chunk));
 		ruc->size = chunk_size;
-		ruc->id = container_count; 
+		ruc->id = container_count - 1; 
 		ruc->data = data;
-		memcpy(ruc->fp, &one_file->fps[i], sizeof(fingerprint));
+		memcpy(&ruc->fp, &one_file->fps[i], sizeof(fingerprint));
 		
+		char code[40];
+		hash2code(ruc->fp, code);
+		printf("add chunk fp:%s size:%d to container:%lu\n", code, ruc->size, ruc->id);
 		add_chunk_to_container(storage_buffer.container_buffer, ruc);
 
 		g_hash_table_insert(recently_unique_chunks, &one_file->fps[i], ruc);
@@ -580,7 +595,7 @@ void *read_remained_files_data_thread(void *arg) {
 	    one_data->data = data;	
 	    memcpy(recordbuf + recordbufoff, one_file->fps[i], sizeof(fingerprint)); 
 	    recordbufoff += sizeof(fingerprint);
-	    memcpy(recordbuf + recordbufoff, &container_count, sizeof(containerid)); 
+	    memcpy(recordbuf + recordbufoff, &ruc->id, sizeof(containerid)); 
 	    recordbufoff += sizeof(containerid);
 	    memcpy(recordbuf + recordbufoff, &chunk_size, sizeof(chunk_size)); 
 	    recordbufoff += sizeof(chunk_size);
@@ -634,6 +649,8 @@ int main(int argc, char *argv[])
 //	strcpy(g2, argv[2]);
 //	printf("g1=%s g2=%s\n", g1, g2);	
 	
+	char src_path[128] = {0};
+	char dest_path[128] = {0};
 	// handle g1
 	target_group = 0;
 
@@ -644,9 +661,7 @@ int main(int argc, char *argv[])
 	pthread_create(&tid3, NULL, read_remained_files_data_thread, NULL);
     
 	intersection(g1_path, g2_path);
-	
-	char src_path[128] = {0};
-	char dest_path[128] = {0};
+
 	sprintf(src_path, "%s/new_container.pool", g1_path);
 	sprintf(dest_path, "%s/container.pool", g1_path);
 	rename(src_path, dest_path);	
@@ -659,7 +674,7 @@ int main(int argc, char *argv[])
 	sprintf(dest_path, "%s/bv0.recipe", g1_path);
 	rename(src_path, dest_path);	
 
-
+	/*
 	target_group = 1;
 	write_identified_file_temp_queue = sync_queue_new(100);	
 	pthread_create(&tid1, NULL, write_identified_file_to_temp_thread, NULL);
@@ -680,6 +695,6 @@ int main(int argc, char *argv[])
 	sprintf(src_path, "%s/new.recipe", g2_path);
 	sprintf(dest_path, "%s/bv0.recipe", g2_path);
 	rename(src_path, dest_path);	
-	
+	*/
 	return 0;
 }
