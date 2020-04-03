@@ -17,7 +17,7 @@
 #include <assert.h>
 #include <glib.h>
 
-#define LEVEL 2
+#define LEVEL 3
 /*
 #define ENABLE_MIGRATION 1
 

@@ -24,7 +24,8 @@ struct migrated_file_info
 	uint64_t *arr;//0~total, for size; total~2*total, for if it exist
 	// int64_t *sizes; //for size
 	// int64_t *in; //if it exist
-	//int64_t *cids;
+	containerid *fp_cids;
+	uint64_t fp_info_start;
 };
 
 void cal_inter(struct fp_info *s1, int64_t s1_count, struct fp_info *s2, int64_t s2_count, struct fp_info **scommon1, int64_t *sc1_count, struct fp_info **scommon2, int64_t *sc2_count);

@@ -107,7 +107,7 @@ void cal_inter(struct fp_info *s1, int64_t s1_count, struct fp_info *s2, int64_t
 //check the full chunks in the S common
 //0 none and migration < shreshold, <0 ->migration, >0 intersection
 //if the bigger file, threshold smaller
-static int64_t file_dedup_migration(struct file_info *mr, uint64_t count, uint64_t fid, uint64_t chunknum, int64_t mig_count[8])
+static int64_t file_dedup_migration(struct file_info *mr, uint64_t count, uint64_t fid, uint64_t chunknum, int64_t mig_count[8], uint64_t *file_index)
 {
 	//binarySearch
 	int64_t begin = 0, end = count - 1;
@@ -116,6 +116,7 @@ static int64_t file_dedup_migration(struct file_info *mr, uint64_t count, uint64
 		int64_t mid = (begin + end) / 2;
 		if (mr[mid].fid == fid)
 		{
+			*file_index = mid;
 			//TO-DO here for miagration!!!
 			if (mr[mid].chunknum == chunknum)
 				return mr[mid].chunknum; //>0 intersection
@@ -220,7 +221,8 @@ void file_find(struct file_info *mr, int64_t mr_count, struct fp_info *scommon, 
 			j++;
 
 		//all chunk = chunksize of the file
-		int64_t k = file_dedup_migration(mr, mr_count, scommon[i].fid, j, mig_count);
+		uint64_t file_index = 0;
+		int64_t k = file_dedup_migration(mr, mr_count, scommon[i].fid, j, mig_count, &file_index);
 		if (k > 0)
 		{
 			//put the files in the common file
@@ -253,7 +255,8 @@ void file_find(struct file_info *mr, int64_t mr_count, struct fp_info *scommon, 
 			m[*m_count].fps = (fingerprint *)malloc(total_num * sizeof(fingerprint));
 			m[*m_count].arr = (uint64_t *)calloc(1, 2 * total_num * sizeof(int64_t));
 			//m[*m_count].in = (int64_t *)calloc(1, total_num * sizeof(int64_t));
-			// m[*m_count].cids = (int64_t *)calloc(1, total_num * sizeof(int64_t));
+			m[*m_count].fp_cids = (int64_t *)calloc(1, total_num * sizeof(containerid));
+			m[*m_count].fp_info_start = mr[file_index].fp_info_start;
 
 			int64_t s;
 			for (s = 0; s < j; s++)
@@ -267,7 +270,7 @@ void file_find(struct file_info *mr, int64_t mr_count, struct fp_info *scommon, 
 				//in ==1, mean it in the scommon
 				(m[*m_count].arr)[order + total_num] = 1;
 				//cid
-				//(m[*m_count].cids)[order] = s1_2[i + s].cid;
+				(m[*m_count].fp_cids)[order] = scommon[i + s].cid;
 			}
 
 			(*m_count)++;

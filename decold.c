@@ -15,7 +15,7 @@ int enable_migration = 1;
 int enable_refs = 0;
 int enable_topk = 0;
 long int big_file = 0;
-float migration_threshold = 0.8;
+float migration_threshold = 0.5;
 
 char g1_temp_path[128] = "/root/destor_test/g1/";
 char g2_temp_path[128] = "/root/destor_test/g2/";
@@ -25,6 +25,8 @@ char g2_path[32] = "/root/destor_test/g2/";
 
 SyncQueue *write_identified_file_temp_queue;
 SyncQueue *write_identified_file_to_destor_queue;
+
+SyncQueue *write_migrated_file_temp_queue;
 
 SyncQueue *write_destor_queue;
 
@@ -37,6 +39,8 @@ SyncQueue *write_g2_remained_files_queue;
 
 pthread_t tid1;
 pthread_t tid3;
+
+pthread_t tid5;
 
 containerid container_count;
 
@@ -72,6 +76,15 @@ static int64_t find_first_fp_by_fid(struct fp_info *fps, uint64_t fp_count, uint
     }
 
     return middle -  fps[middle].order;
+}
+
+void push_migriated_files(struct migrated_file_info *migrated_files, uint64_t migrated_file_count, SyncQueue *queue) {
+	int i = 0;
+	for(i = 0; i < migrated_file_count; i++) {
+		printf ("push migrated file %ld\n", migrated_files->fid);
+	    sync_queue_push(queue, migrated_files + i);
+	}
+	sync_queue_term(queue);
 }
 
 void push_identified_files(struct identified_file_info *identified_files, uint64_t identified_file_count, SyncQueue *queue) {
@@ -199,11 +212,38 @@ void intersection(const char *path1, const char *path2)
 	int64_t mig2_count[8]={0,0,0,0,0,0,0,0}; //60,65,70,75,80,85,90,95%
 
 	file_find(file1, file1_count, scommon1, sc1_count, &identified_file1, &identified_file1_count, &m1, &m1_count, mig1_count);
-	file_find(file2, file2_count, scommon2, sc2_count, &identified_file2, &identified_file2_count, &m2, &m2_count, mig2_count);
+//	file_find(file2, file2_count, scommon2, sc2_count, &identified_file2, &identified_file2_count, &m2, &m2_count, mig2_count);
+
+	for (i = 0; i < m1_count; i++) {
+		struct fp_info *start = s1_ord + m1[i].fp_info_start;
+		for (j = 0; j < m1[i].total_num; j++) {
+			if (m1[i].arr[m1[i].total_num + j] != 1) {
+				memcpy(&m1[i].fps[j], &start->fp, sizeof(fingerprint));
+				m1[i].fp_cids[j] = start->cid;
+				m1[i].arr[j] = start->size;
+			}
+			start++;
+		}
+	}
+
+
+
 
 	myprintf("%s total file count:%ld fingerprint count:%ld identified file count:%ld similar file count:%ld\n", target_group?"g2":"g1", file1_count, sc1_count, identified_file1_count, m1_count);
 	
 	push_identified_files(identified_file1, identified_file1_count, write_identified_file_temp_queue);
+
+	/*
+ 	*
+ 	*
+ 	* *
+ 	*/ 	
+	push_migriated_files(m1, m1_count, write_migrated_file_temp_queue);
+
+	/*
+ 	*
+ 	* */
+
 
 	init_container_store();
 
@@ -211,6 +251,7 @@ void intersection(const char *path1, const char *path2)
 
 	pthread_join(tid1, NULL);
 	pthread_join(tid3, NULL);
+	pthread_join(tid5, NULL);
 
 	free(file1);
 	free(file2);
@@ -250,6 +291,118 @@ void * read_from_destor_thread(void *arg)
     		
     return NULL;
 }
+/*
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
+void *write_migrated_file_temp_thread(void *arg) {
+    	char temp_migrated_file_path[128];
+	char pool_path[128];
+    	if (0 == target_group) 
+    	{
+		sprintf(temp_migrated_file_path, "%s/similar_file", g1_temp_path);
+		sprintf(pool_path, "%s/%s", g1_path, "container.pool");
+    	}
+    	else
+    	{
+		sprintf(temp_migrated_file_path, "%s/similar_file", g2_temp_path);
+		sprintf(pool_path, "%s/%s", g2_path, "container.pool");
+    	}
+
+	FILE *pool_fp = fopen(pool_path, "w");
+	if (NULL ==  pool_fp) {
+		printf("fopen %s failed\n", pool_path);
+	}
+    
+    	uint64_t migrated_file_count = 0;
+    	struct migrated_file_info *file;
+    	FILE *filep = NULL;
+    	while ((file = sync_queue_pop(write_migrated_file_temp_queue))) {
+		if (NULL == filep) {
+	        	filep = fopen(temp_migrated_file_path, "w+");
+	        	if (NULL == filep) {
+		        	printf("fopen %s failed\n", temp_migrated_file_path);
+		        	break;
+	        	}
+	        	fwrite(&migrated_file_count, sizeof(uint64_t), 1, filep);
+	    	}
+	    	printf("write migrated_file file:%lu , chunk:%lu to temp file\n", file->fid, file->total_num);
+	    	fwrite(file, sizeof(struct identified_file_info), 1, filep); 
+	    	uint64_t i = 0;
+		// fps
+	    	for (i = 0; i < file->total_num; i++)
+	        	fwrite(&file->fps[i], sizeof(fingerprint), 1, filep); 
+
+		// arr for state
+		for (i = 0; i < file->total_num; i++)
+			fwrite(&file->arr[i], sizeof(uint64_t), 1, filep);		
+		for (i = 0; i < file->total_num; i++)
+			fwrite(&file->arr[file->total_num + i], sizeof(uint64_t), 1, filep);		
+
+		// write chunk data
+		char *data = NULL;
+		int32_t chunk_size;
+		for (i = 0; i < file->total_num; i++) {
+			if (file->arr[i + file->total_num] != 1) {
+				chunk_size = retrieve_from_container(pool_fp, file->fp_cids[i], &data, file->fps[i]);
+				if (chunk_size != file->arr[i]) {
+					printf ("chunk size:%d != %d\n", chunk_size, file->arr[i]);
+					assert("retrieve migrated files chunk from containerpool failed\n");
+				}	
+				fwrite(data, chunk_size, 1, filep);
+			}
+		}
+
+	    	migrated_file_count++;
+	}
+
+}
+/*
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
 
 void * write_identified_file_to_temp_thread(void *arg)
 {
@@ -693,6 +846,9 @@ int main(int argc, char *argv[])
 
 	remained_files_queue = sync_queue_new(100);
 	pthread_create(&tid3, NULL, read_remained_files_data_thread, NULL);
+	
+	write_migrated_file_temp_queue = sync_queue_new(100);
+	pthread_create(&tid5, NULL, write_migrated_file_temp_thread, NULL);
     
 	intersection(g1_path, g2_path);
 
@@ -707,6 +863,9 @@ int main(int argc, char *argv[])
 	sprintf(src_path, "%s/new.recipe", g1_path);
 	sprintf(dest_path, "%s/bv0.recipe", g1_path);
 	rename(src_path, dest_path);	
+
+
+
 
 	target_group = 1;
 	write_identified_file_temp_queue = sync_queue_new(100);	

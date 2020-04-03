@@ -41,6 +41,8 @@ struct file_info
 	// TO-DO: in which recipe
 	uint64_t offset_m;
 	uint64_t offset_r;
+
+	uint64_t fp_info_start;
 };
 
 struct remained_file_info

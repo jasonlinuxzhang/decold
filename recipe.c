@@ -57,6 +57,9 @@ static int64_t read_next_n_chunk_pointers(FILE *recipe_fp, int64_t fid, struct f
 
 void read_recipe(const char *path, struct fp_info **s1_t, int64_t *s1_count, struct file_info **mr_t, int64_t *mr_count, int64_t *empty_count)
 {
+
+	static uint64_t fp_start = 0;
+
 	char path_meta[100], path_recipe[100];
 	sprintf(path_meta, "%s%s", path, "bv0.meta");
 	sprintf(path_recipe, "%s%s", path, "bv0.recipe");
@@ -112,6 +115,8 @@ void read_recipe(const char *path, struct fp_info **s1_t, int64_t *s1_count, str
 		//recipe start
 		mr[*mr_count].offset_r = ftell(recipe_fp);
 
+		mr[*mr_count].fp_info_start = fp_start;	
+		fp_start +=  file->chunknum;
 
 		if (file->filesize == 0)
 			(*empty_count)++;
